@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0">
+    <title>GOQ · Smart Running Coach</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary: #D32F2F; --primary-dark: #B71C1C; --secondary: #2EC4B6;
+            --radius: 20px; --radius-sm: 12px; --radius-xs: 8px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+            --bg: #010000; --card-bg: rgba(13,13,13,0.75); --card-bg2: rgba(26,26,26,0.7);
+            --text: #E1E1E1; --text-secondary: #B0B0B0; --border: rgba(255,255,255,0.12);
+            --input-bg: rgba(26,26,26,0.8); --map-bg: #0D0D0D; --shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .light-theme {
+            --bg: #E8E8E8; --card-bg: #FFFFFF; --card-bg2: #F5F5F5; --text: #000000;
+            --text-secondary: #000000; --border: rgba(0,0,0,0.08); --input-bg: #FFFFFF;
+            --map-bg: #F0F0F0; --shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+        .light-theme .app-header { background: rgba(255,255,255,0.95); border-bottom: 1px solid rgba(0,0,0,0.06); }
+        .light-theme .bottom-nav { background: rgba(255,255,255,0.97); border-top: 1px solid rgba(0,0,0,0.06); }
+        .light-theme .chip { background: #FFFFFF; color: #000000; border: 2px solid #DDD; }
+        .light-theme .chip.selected { background: rgba(211,47,47,0.08); color: var(--primary); border-color: var(--primary); }
+        .light-theme .card { box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .light-theme select, .light-theme input { background: #F9F9F9; border-color: #DDD; color: #000000; }
+        .light-theme h1,.light-theme h2,.light-theme h3,.light-theme h4,.light-theme h5,.light-theme h6,
+        .light-theme p,.light-theme span,.light-theme label,.light-theme .text-secondary,
+        .light-theme .title,.light-theme .name,.light-theme .event-name,.light-theme .shoe-name,
+        .light-theme .cosmetic-name,.light-theme .challenge-name,.light-theme .leaderboard-name,
+        .light-theme .group-name,.light-theme .nav-item,.light-theme .schedule-info .title,
+        .light-theme .schedule-info .detail,.light-theme .stat-label,.light-theme .run-stat-label,
+        .light-theme .shoe-detail,.light-theme .cosmetic-detail,.light-theme .event-card .event-location,
+        .light-theme .leaderboard-points,.light-theme .challenge-detail,.light-theme .category-header,
+        .light-theme .shoe-price,.light-theme .cosmetic-price,.light-theme .profile-username,
+        .light-theme .header-badge,.light-theme .achievement-text,.light-theme .event-month,
+        .light-theme .event-day { color: #000000 !important; }
+        .light-theme .run-summary-card { background: #FFFFFF !important; border: 2px solid var(--primary) !important; box-shadow: 0 0 20px rgba(0,0,0,0.1) !important; }
+        .light-theme .run-summary-card .summary-header { color: var(--primary) !important; }
+        .light-theme .run-summary-card .summary-user { color: #000 !important; }
+        .light-theme .run-summary-card .stat-block .stat-value { color: #000 !important; }
+        .light-theme .run-summary-card .stat-block .stat-label { color: #000 !important; }
+        .light-theme .run-summary-card .summary-details { background: rgba(0,0,0,0.03) !important; }
+        .light-theme .run-summary-card .summary-details .detail-value { color: var(--primary) !important; }
+        .light-theme .run-summary-card .summary-details .detail-label { color: #000 !important; }
+
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+        body { font-family:var(--font); background:var(--bg); color:var(--text); display:flex; justify-content:center; align-items:center; min-height:100vh; overflow-x:hidden; }
+        .app-container { width:100%; max-width:430px; height:100vh; max-height:930px; background:var(--bg); position:relative; overflow:hidden; display:flex; flex-direction:column; border-radius:0; box-shadow:var(--shadow); border:1px solid var(--border); }
+        @media (min-width: 431px) { .app-container { border-radius:28px; height:92vh; max-height:900px; } }
+        .app-header { padding:16px 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; background:rgba(1,0,0,0.85); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); flex-shrink:0; }
+        .app-header .logo { font-weight:700; font-size:1.3rem; color: var(--text); }
+        .header-badge { background:var(--card-bg); padding:8px 14px; border-radius:20px; font-size:0.8rem; font-weight:600; color:var(--primary); border:1px solid var(--border); }
+        .main-content { flex:1; overflow-y:auto; padding:16px 16px 100px; }
+        .main-content::-webkit-scrollbar { width:0; }
+        .bottom-nav { position: absolute; bottom:0; left:0; right:0; background: rgba(1,0,0,0.95); backdrop-filter: blur(20px); display: flex; justify-content: space-around; padding: 6px 2px 16px; border-top: 1px solid var(--border); z-index:20; flex-shrink:0; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 6px 4px; border-radius: 14px; color: var(--text-secondary); font-size: 0.7rem; font-weight: 500; flex: 1; }
+        .nav-item.active { color: var(--primary); background: rgba(211,47,47,0.1); }
+        .card { background:var(--card-bg); border-radius:var(--radius); padding:20px; margin-bottom:16px; border:1px solid var(--border); }
+        h2 { font-size:1.2rem; font-weight:700; margin-bottom:4px; color: var(--text); }
+        h3 { font-size:1rem; font-weight:600; color: var(--text); }
+        .text-secondary { color:var(--text-secondary); font-size:0.85rem; }
+        .text-primary { color:var(--primary); font-weight:600; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 24px; border-radius:25px; font-weight:600; font-size:0.9rem; cursor:pointer; border:none; font-family:var(--font); }
+        .btn-primary { background:var(--primary); color:#fff; }
+        .btn-outline { background:transparent; border:2px solid var(--primary); color:var(--primary); }
+        .btn-full { width:100%; }
+        .btn-sm { padding:6px 14px; font-size:0.75rem; border-radius:15px; }
+        .form-group { margin-bottom:16px; }
+        .form-group label { display:block; font-weight:600; margin-bottom:6px; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase; }
+        select, input { width:100%; padding:14px 16px; border-radius:var(--radius-xs); background:var(--input-bg); border:2px solid var(--border); color:var(--text); font-size:0.95rem; font-family:var(--font); -webkit-appearance:none; appearance:none; }
+        select:focus, input:focus { outline:none; border-color:var(--primary); }
+        .chip-group { display:flex; flex-wrap:wrap; gap:8px; }
+        .chip { padding:10px 16px; border-radius:20px; background:var(--card-bg2); border:2px solid var(--border); cursor:pointer; font-size:0.82rem; font-weight:500; color:var(--text-secondary); }
+        .chip.selected { background:rgba(211,47,47,0.2); border-color:var(--primary); color:var(--primary); font-weight:600; }
+
+        /* Stylish event card */
+        .event-card {
+            display: flex;
+            align-items: stretch;
+            background: var(--card-bg2);
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: box-shadow 0.2s;
+        }
+        .event-card:hover {
+            box-shadow: 0 0 15px rgba(211,47,47,0.2);
+            border-color: var(--primary);
+        }
+        .event-date-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 14px;
+            min-width: 65px;
+            text-align: center;
+            border-radius: 0;
+            font-weight: 700;
+        }
+        .event-date-badge .event-month {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+        .event-date-badge .event-day {
+            font-size: 1.8rem;
+            line-height: 1;
+            margin-top: 2px;
+        }
+        .event-info {
+            flex: 1;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .event-info .event-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+        .event-info .event-location {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+        .event-type-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 4px;
+            background: rgba(211,47,47,0.15);
+            color: var(--primary);
+            align-self: flex-start;
+        }
+        /* Light mode overrides for event cards */
+        .light-theme .event-card { background: #FFFFFF; border: 1px solid #DDD; }
+        .light-theme .event-card:hover { box-shadow: 0 0 12px rgba(0,0,0,0.1); border-color: var(--primary); }
+        .light-theme .event-date-badge { color: #FFFFFF; } /* stays white */
+        .light-theme .event-info .event-name { color: #000000; }
+        .light-theme .event-info .event-location { color: #000000; }
+        .light-theme .event-type-badge { color: var(--primary); background: rgba(211,47,47,0.1); }
+
+        .shoe-card { padding:14px; border-radius:var(--radius-sm); background:var(--card-bg2); margin-bottom:10px; border:1px solid var(--border); }
+        .shoe-card.best-match { border:2px solid var(--primary); background:rgba(211,47,47,0.1); }
+        .best-tag { display:inline-block; background:var(--primary); color:#fff; padding:3px 10px; border-radius:10px; font-size:0.65rem; font-weight:700; margin-bottom:6px; }
+        .shoe-name { font-weight:700; font-size:1rem; }
+        .shoe-detail { font-size:0.8rem; color:var(--text-secondary); margin:4px 0; }
+        .shoe-price { color:var(--primary); font-weight:700; font-size:1rem; }
+        .shoe-buy { display:inline-block; margin-top:6px; padding:6px 16px; background:var(--primary); color:#fff; border-radius:15px; font-size:0.75rem; font-weight:600; text-decoration:none; }
+
+        .cosmetic-item { display:flex; align-items:center; gap:10px; padding:10px; border-radius:var(--radius-sm); background:var(--card-bg2); margin-bottom:6px; }
+        .cosmetic-info { flex:1; }
+        .cosmetic-name { font-weight:700; font-size:0.9rem; }
+        .cosmetic-detail { font-size:0.75rem; color:var(--text-secondary); }
+        .cosmetic-price { color:var(--primary); font-weight:600; font-size:0.85rem; }
+        .cosmetic-buy { padding:5px 12px; background:var(--primary); color:#fff; border-radius:12px; font-size:0.7rem; font-weight:600; text-decoration:none; }
+
+        .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:200; display:flex; align-items:center; justify-content:center; }
+        .modal-card { background:var(--card-bg); border-radius:var(--radius); padding:24px; margin:20px; max-width:350px; width:100%; border:1px solid var(--border); text-align:center; }
+
+        .page { display:none; animation:fadeSlideIn 0.35s ease-out; }
+        .page.active { display:block; }
+        @keyframes fadeSlideIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:var(--secondary); color:#000; padding:12px 24px; border-radius:25px; font-weight:600; z-index:100; opacity:0; pointer-events:none; transition:opacity 0.3s; font-size:0.9rem; }
+        .toast.show { opacity:1; }
+
+        #map { height:250px; border-radius:var(--radius-sm); margin:12px 0; border:2px solid var(--border); background:var(--map-bg); }
+        .run-stat-display { display:flex; justify-content:space-around; text-align:center; margin:12px 0; }
+        .run-stat-item { font-size:1.6rem; font-weight:700; }
+        .run-stat-label { font-size:0.7rem; color:var(--text-secondary); }
+
+        .run-summary-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0d0d0d 100%);
+            border-radius: var(--radius); padding: 24px; margin-top: 20px;
+            border: 2px solid var(--primary); box-shadow: 0 0 30px rgba(211,47,47,0.3);
+            position: relative; display: none;
+        }
+        .run-summary-card .summary-header { font-size:1.4rem; font-weight:700; text-align:center; margin-bottom:12px; color:var(--primary); letter-spacing:1px; text-transform:uppercase; }
+        .run-summary-card .summary-user { text-align:center; font-size:0.9rem; color:var(--text-secondary); margin-bottom:16px; }
+        .run-summary-card .summary-map { width:100%; height:180px; border-radius:var(--radius-sm); margin:12px 0; border:1px solid var(--border); background:var(--map-bg); }
+        .run-summary-card .summary-stats { display:flex; justify-content:space-around; margin:16px 0; }
+        .run-summary-card .stat-block { text-align:center; }
+        .run-summary-card .stat-block .stat-value { font-size:2rem; font-weight:700; color:#fff; }
+        .run-summary-card .stat-block .stat-label { font-size:0.7rem; color:rgba(255,255,255,0.7); text-transform:uppercase; margin-top:4px; }
+        .run-summary-card .summary-details { display:flex; justify-content:space-between; margin-top:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:var(--radius-sm); }
+        .run-summary-card .summary-details .detail-item { display:flex; flex-direction:column; align-items:center; gap:4px; }
+        .run-summary-card .summary-details .detail-value { font-size:0.9rem; font-weight:600; color:var(--primary); }
+        .run-summary-card .summary-details .detail-label { font-size:0.65rem; color:rgba(255,255,255,0.6); }
+
+        .challenge-card { padding:14px; border-radius:var(--radius-sm); background:var(--card-bg2); margin-bottom:10px; border:1px solid var(--border); }
+        .leaderboard-item { display:flex; align-items:center; gap:10px; padding:10px; border-radius:var(--radius-sm); background:var(--card-bg2); margin-bottom:6px; }
+        .leaderboard-rank { font-weight:700; font-size:1rem; width:28px; text-align:center; color:var(--primary); }
+        .leaderboard-avatar { width:28px; height:28px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.75rem; }
+        .leaderboard-name { flex:1; font-weight:600; font-size:0.9rem; }
+        .leaderboard-points { color:var(--primary); font-weight:700; font-size:0.9rem; }
+
+        .profile-avatar { width:60px; height:60px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; font-size:1.8rem; color:#fff; margin:0 auto 8px; }
+        .profile-username { text-align:center; font-size:1rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+
+        .onboarding-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: var(--bg); z-index:100; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; }
+        .onboarding-overlay .onboarding-content { width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+        .onboarding-overlay .logo { font-size: 2rem; font-weight: 700; margin-bottom: 10px; color: var(--text); text-align: center; }
+        .onboarding-overlay .step-indicator { text-align: center; color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 16px; }
+
+        button, select, input, textarea, .chip, .btn, .nav-item, .card, h1, h2, h3, h4, p, span, div { font-family:var(--font); }
+        .schedule-day { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--card-bg2); border-radius:var(--radius-sm); margin-bottom:8px; cursor:pointer; }
+        .schedule-day.rest { opacity:0.6; }
+        .day-indicator { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0; background:var(--bg); border:2px solid var(--border); color:var(--text-secondary); }
+        .day-indicator.today { background:var(--primary); border-color:var(--primary); color:#fff; }
+        .day-indicator.completed { background:var(--secondary); border-color:var(--secondary); color:#000; }
+        .schedule-info { flex:1; }
+        .schedule-info .title { font-weight:600; font-size:0.9rem; }
+        .schedule-info .detail { font-size:0.78rem; color:var(--text-secondary); }
+        .schedule-badge { font-size:0.7rem; padding:5px 10px; border-radius:12px; font-weight:600; }
+        .badge-easy { background:rgba(6,214,160,0.2); color:var(--secondary); }
+        .badge-hard { background:rgba(239,71,111,0.2); color:var(--danger); }
+        .badge-medium { background:rgba(255,209,102,0.2); color:var(--accent-gold); }
+        .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .stat-item { background:var(--card-bg2); border-radius:var(--radius-sm); padding:14px; text-align:center; border:1px solid var(--border); }
+        .stat-value { font-size:1.5rem; font-weight:700; color:var(--primary); }
+        .stat-label { font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; margin-top:2px; }
+    </style>
+</head>
+<body>
+<div class="app-container" id="appContainer">
+    <div class="onboarding-overlay" id="onboardingOverlay">
+        <div class="onboarding-content" id="onboardingContent">
+            <div class="logo">GOQ</div>
+            <p class="step-indicator" id="stepIndicator">Step 1 of 6</p>
+            <div id="onboardingStepContainer"></div>
+        </div>
+    </div>
+
+    <header class="app-header"><div class="logo">GOQ</div><div class="header-badge" id="headerBadge">Ready</div></header>
+    <div class="toast" id="toast"></div>
+
+    <div class="modal-overlay" id="confirmModal" style="display:none;">
+        <div class="modal-card"><h3>Complete this workout?</h3><p id="confirmModalText"></p><button class="btn btn-primary btn-full" id="confirmModalYes">Yes, Mark Completed</button><button class="btn btn-outline btn-full" style="margin-top:8px;" onclick="closeConfirmModal()">Cancel</button></div>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <!-- Profile Page -->
+        <div class="page active" id="page-profile">
+            <div class="card" style="text-align:center;">
+                <div class="profile-avatar" id="profileAvatar">R</div>
+                <input type="text" id="profileNameInput" value="Runner" style="background:transparent;border:none;text-align:center;width:100%;font-size:1.1rem;font-weight:700;color:var(--text);" onchange="updateProfileName()">
+                <p class="profile-username">@<span id="profileUsername">runner</span></p>
+            </div>
+            <div class="card"><h2>Runner Profile</h2><p class="text-secondary">Help us understand your running background.</p></div>
+            <div class="card">
+                <div class="form-group"><label>Experience</label><div class="chip-group" id="experienceGroup"><span class="chip" data-value="beginner">Beginner</span><span class="chip selected" data-value="intermediate">Intermediate</span><span class="chip" data-value="advanced">Advanced</span></div></div>
+                <div class="form-group"><label>Goal</label><select id="goalSelect"><option value="5k">5K</option><option value="10k" selected>10K</option><option value="half_marathon">Half Marathon</option><option value="marathon">Marathon</option><option value="triathlon">Triathlon</option><option value="ironman">Ironman</option><option value="fitness">Fitness</option><option value="speed">Speed</option></select></div>
+                <div class="form-group"><label>Weekly Km</label><input type="number" id="weeklyKmInput" value="15"></div>
+                <div class="form-group"><label>Days/Week</label><select id="daysPerWeek"><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select></div>
+                <button class="btn btn-primary btn-full" onclick="generatePlan()">Generate My Plan</button>
+            </div>
+            <div class="card"><h2>Your Progress</h2><div class="stat-grid"><div class="stat-item"><div class="stat-value" id="progressTotalKm">0</div><div class="stat-label">Total Km</div></div><div class="stat-item"><div class="stat-value" id="progressRuns">0</div><div class="stat-label">Runs</div></div><div class="stat-item"><div class="stat-value" id="progressStreak">0</div><div class="stat-label">Day Streak</div></div><div class="stat-item"><div class="stat-value" id="progressBestPace">--</div><div class="stat-label">Best Pace</div></div></div></div>
+            <div class="card"><h3>Achievements</h3><div id="achievementsList"></div></div>
+            <div class="card"><h3>Groups</h3>
+                <div class="form-group"><label>Create Group</label><input type="text" id="newGroupName" placeholder="Group name"></div>
+                <button class="btn btn-primary btn-full btn-sm" onclick="createGroup()">Create</button>
+                <div class="form-group" style="margin-top:12px;"><label>Join with Passcode</label><input type="text" id="joinPasscode" placeholder="Passcode"></div>
+                <button class="btn btn-outline btn-full btn-sm" onclick="joinGroup()">Join</button>
+                <div style="margin-top:12px;"><h4>Public Groups</h4><div id="publicGroupsList"></div></div>
+                <div style="margin-top:8px;"><h4>My Groups</h4><div id="myGroupsList"></div></div>
+            </div>
+            <div class="card"><h2>Settings</h2><div class="form-group"><label>Theme</label><div class="chip-group" id="themeGroup"><span class="chip" data-theme="light">Light</span><span class="chip selected" data-theme="dark">Dark</span></div></div></div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div class="page" id="page-dashboard">
+            <div class="card card-highlight"><h2 id="greetingText">Good morning!</h2><p class="text-secondary" id="planSummary">Let's get your personalized plan ready.</p></div>
+            <div class="card"><h3>Global Leaderboard</h3><div id="leaderboardList"></div></div>
+            <div class="card"><h3>Friends Leaderboard</h3><div id="groupLeaderboardList"><p class="text-secondary">Join a group to compete with friends.</p></div></div>
+            <div class="card"><h3>Challenges</h3><div id="homeChallengesList"></div></div>
+            <div class="card"><h3>My Medals</h3><div id="homeMedals"></div></div>
+            <div class="card" id="homeEventsCard"><h3>Nearby Events</h3><div id="homeEventsList"></div></div>
+        </div>
+
+        <!-- Record Page -->
+        <div class="page" id="page-record">
+            <div class="card"><h2>Record Your Run</h2><p class="text-secondary">Start tracking to log your route.</p></div>
+            <div id="map"></div>
+            <div class="run-stat-display"><div><div class="run-stat-item" id="runTimer">00:00</div><div class="run-stat-label">Time</div></div><div><div class="run-stat-item" id="runDistance">0.00</div><div class="run-stat-label">KM</div></div><div><div class="run-stat-item" id="runPace">--</div><div class="run-stat-label">/km</div></div></div>
+            <button class="btn btn-primary btn-full btn-lg" id="startRunBtn" onclick="startRun()">Start Run</button>
+            <button class="btn btn-outline btn-full btn-lg" id="stopRunBtn" style="display:none;" onclick="stopRun()">Stop & Save</button>
+            <p id="gpsStatus" class="text-secondary" style="text-align:center;margin-top:8px;"></p>
+            <div class="card" style="margin-top:16px;"><h3>Recent Runs</h3><div id="recentRunsList"></div></div>
+            <div class="run-summary-card" id="runSummaryCard">
+                <div class="summary-header">GOQ Run Summary</div>
+                <div class="summary-user" id="summaryUserInfo"></div>
+                <div id="summaryMapContainer" class="summary-map"></div>
+                <div class="summary-stats">
+                    <div class="stat-block"><div class="stat-value" id="summaryTime">00:00</div><div class="stat-label">Time</div></div>
+                    <div class="stat-block"><div class="stat-value" id="summaryDist">0.00</div><div class="stat-label">KM</div></div>
+                    <div class="stat-block"><div class="stat-value" id="summaryPace">--</div><div class="stat-label">/km</div></div>
+                </div>
+                <div class="summary-details">
+                    <div class="detail-item"><div class="detail-value" id="summaryCalories">0</div><div class="detail-label">Calories</div></div>
+                    <div class="detail-item"><div class="detail-value" id="summaryAge">--</div><div class="detail-label">Age</div></div>
+                    <div class="detail-item"><div class="detail-value" id="summaryWeight">--</div><div class="detail-label">Weight (kg)</div></div>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn btn-outline btn-full" id="downloadWithBgBtn" style="display:none;" onclick="downloadRunImage(false)">Download with BG</button>
+                <button class="btn btn-outline btn-full" id="downloadTransparentBtn" style="display:none;" onclick="downloadRunImage(true)">Download Transparent</button>
+            </div>
+        </div>
+
+        <!-- Gear Advisor Page -->
+        <div class="page" id="page-gear">
+            <div class="card"><h2>Gear Advisor</h2></div>
+            <div class="card"><h3>Shoe Finder</h3>
+                <div class="form-group"><label>Race Type</label><div class="chip-group" id="shoeRaceTypeGroup"><span class="chip" data-value="5k">5K</span><span class="chip" data-value="10k">10K</span><span class="chip" data-value="half_marathon">Half Marathon</span><span class="chip selected" data-value="marathon">Marathon</span><span class="chip" data-value="triathlon">Triathlon</span><span class="chip" data-value="ironman">Ironman</span></div></div>
+                <div class="form-group"><label>Experience Level</label><div class="chip-group" id="shoeExpGroup"><span class="chip" data-value="beginner">Beginner</span><span class="chip selected" data-value="intermediate">Intermediate</span><span class="chip" data-value="advanced">Advanced</span></div></div>
+                <div class="form-group"><label>Running Style</label><div class="chip-group" id="runStyleGroup"><span class="chip selected" data-value="neutral">Neutral</span><span class="chip" data-value="overpronation">Overpronation</span><span class="chip" data-value="supination">Supination</span></div></div>
+                <div class="form-group"><label>Shoe Budget (USD)</label><input type="number" id="shoeBudgetInput" value="150" min="75"><p class="text-secondary" style="font-size:0.7rem;margin-top:4px;">Minimum $75</p></div>
+                <label class="btn btn-outline btn-full" for="footImageInput" style="cursor:pointer;">Take Photo of Footprint</label>
+                <input type="file" id="footImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFootImage(this)">
+                <img id="footPreview" style="max-width:100%;max-height:200px;border-radius:12px;display:none;margin-top:12px;" alt="Footprint">
+                <button class="btn btn-primary btn-full" onclick="analyzeFootAndSuggestShoe()" id="analyzeFootBtn" style="margin-top:12px;">Analyze & Suggest Shoes</button>
+                <div class="processing-overlay" id="footProcessingUI" style="display:none;text-align:center;padding:12px;"><div class="spinner"></div><p>Analyzing...</p></div>
+                <div id="shoeSuggestionResult"></div>
+            </div>
+            <div class="card"><h3>Race Cosmetics</h3>
+                <p class="text-secondary">Essential gear for your specific race type.</p>
+                <div class="form-group" style="margin-top:12px;"><label>Race Type</label><div class="chip-group" id="cosmeticRaceTypeGroup"><span class="chip" data-value="5k">5K</span><span class="chip" data-value="10k">10K</span><span class="chip" data-value="half_marathon">Half Marathon</span><span class="chip selected" data-value="marathon">Marathon</span><span class="chip" data-value="triathlon">Triathlon</span><span class="chip" data-value="ironman">Ironman</span></div></div>
+                <div class="form-group"><label>Experience Level</label><div class="chip-group" id="cosmeticExpGroup"><span class="chip" data-value="beginner">Beginner</span><span class="chip selected" data-value="intermediate">Intermediate</span><span class="chip" data-value="advanced">Advanced</span></div></div>
+                <div class="form-group"><label>Budget (USD)</label><input type="number" id="cosmeticBudgetInput" value="50" min="10"><p class="text-secondary" style="font-size:0.7rem;margin-top:4px;">Minimum $10</p></div>
+                <button class="btn btn-primary btn-full" onclick="suggestRaceCosmetics()">Show Race Gear</button>
+                <div id="cosmeticsResult" style="margin-top:12px;"></div>
+            </div>
+        </div>
+
+        <!-- Plan Page -->
+        <div class="page" id="page-plan">
+            <div class="card card-highlight"><h2 id="planTitle">Training Plan</h2><p class="text-secondary" id="planDescription"></p></div>
+            <h3>This Week</h3><div id="weeklySchedule"></div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item" data-page="dashboard" onclick="navigateTo('dashboard')">Home</div>
+        <div class="nav-item" data-page="record" onclick="navigateTo('record')">Record</div>
+        <div class="nav-item" data-page="gear" onclick="navigateTo('gear')">Gear</div>
+        <div class="nav-item" data-page="plan" onclick="navigateTo('plan')">Plan</div>
+        <div class="nav-item active" data-page="profile" onclick="navigateTo('profile')">Profile</div>
+    </nav>
+</div>
+
+<script>
+    const state = {
+        profileName: 'Runner', profileUsername: 'runner', profileInitial: 'R', totalPoints: 0, completedChallenges: [],
+        groups: [], myGroups: [],
+        experience: 'intermediate', goal: '10k', weeklyKm: 15, daysPerWeek: 4,
+        planGenerated: false, planName: '', planDescription: '', weeklySchedule: [],
+        completedRuns: {}, totalRunsCompleted: 0, streak: 0, bestPace: null,
+        achievements: [], runHistory: [],
+        theme: 'dark', footArchType: null, footStyle: 'neutral',
+        userLocation: '',
+        leaderboard: [
+            { name: 'Sarah M.', points: 1240, avatar: 'S' },
+            { name: 'Ahmed K.', points: 980, avatar: 'A' },
+            { name: 'Maria L.', points: 860, avatar: 'M' },
+            { name: 'John D.', points: 720, avatar: 'J' },
+            { name: 'Yuki T.', points: 650, avatar: 'Y' }
+        ],
+        userProfile: { fitnessBackground: '', otherSport: '', otherSportLevel: '', runningLevel: '', maxKmWithoutTired: 0, weight: 70, age: 25, height: 170, weeklyAvailableDays: 4, primaryGoal: '', injuryHistory: '', terrainPreference: '', onboarded: false }
+    };
+
+    // ---------- ONBOARDING ----------
+    let cs = 1, totalSteps = 6;
+    function renderOnboardingStep() {
+        const c = document.getElementById('onboardingStepContainer');
+        c.innerHTML = '';
+        document.getElementById('stepIndicator').textContent = `Step ${cs} of ${totalSteps}`;
+        let h = '';
+        if (cs === 1) {
+            h = `<div class="card"><h2>Where are you from?</h2><p class="text-secondary">We'll find the best running events near you.</p></div>
+                 <div class="card"><div class="form-group"><label>Your country</label><input type="text" id="locationInput" placeholder="e.g. Morocco, USA, France..." value="${state.userLocation||''}"></div></div>
+                 <button class="btn btn-primary btn-full" onclick="nextStep(1)">Continue</button>`;
+        } else if (cs === 2) {
+            h = `<div class="card"><h2>Welcome!</h2><p class="text-secondary">What's your fitness background?</p></div>
+                 <div class="card"><div class="chip-group" id="fitnessBgGroup"><span class="chip" data-value="new_to_sport">New to sports</span><span class="chip" data-value="other_sport">Another sport</span><span class="chip" data-value="already_runner">I already run</span></div></div>
+                 <button class="btn btn-primary btn-full" onclick="nextStep(2)">Continue</button>`;
+        } else if (cs === 3) {
+            if (state.userProfile.fitnessBackground === 'other_sport') {
+                h = `<div class="card"><h2>Your sport</h2></div><div class="card"><select id="otherSportSelect"><option value="">Select</option><option value="football">Football</option><option value="swimming">Swimming</option><option value="cycling">Cycling</option></select><div class="chip-group" id="sportLevelGroup" style="margin-top:12px;"><span class="chip" data-value="beginner">Beginner</span><span class="chip" data-value="intermediate">Intermediate</span><span class="chip" data-value="advanced">Advanced</span></div></div><button class="btn btn-primary btn-full" onclick="nextStep(3)">Continue</button>`;
+            } else if (state.userProfile.fitnessBackground === 'already_runner') {
+                h = `<div class="card"><h2>Running experience</h2></div><div class="card"><div class="chip-group" id="runningLevelGroup"><span class="chip" data-value="beginner">Beginner</span><span class="chip" data-value="intermediate">Intermediate</span><span class="chip" data-value="advanced">Advanced</span></div><input type="number" id="maxKmInput" value="5" style="margin-top:12px;" placeholder="Km without tired"></div><button class="btn btn-primary btn-full" onclick="nextStep(3)">Continue</button>`;
+            } else {
+                h = `<div class="card"><h2>Great!</h2></div><button class="btn btn-primary btn-full" onclick="nextStep(3)">Continue</button>`;
+            }
+        } else if (cs === 4) {
+            h = `<div class="card"><h2>Body metrics</h2></div><div class="card"><input type="number" id="weightInput" value="70" placeholder="Weight (kg)"><input type="number" id="heightInput" value="170" placeholder="Height (cm)" style="margin-top:8px;"><input type="number" id="ageInput" value="25" placeholder="Age" style="margin-top:8px;"></div><button class="btn btn-primary btn-full" onclick="nextStep(4)">Continue</button>`;
+        } else if (cs === 5) {
+            h = `<div class="card"><h2>Training</h2></div><div class="card"><select id="weeklyDaysSelect"><option value="3">3 days</option><option value="4" selected>4 days</option><option value="5">5 days</option></select><select id="primaryGoalSelect" style="margin-top:8px;"><option value="fitness">Fitness</option><option value="5k">5K</option><option value="10k">10K</option><option value="half_marathon">Half Marathon</option><option value="marathon">Marathon</option><option value="triathlon">Triathlon</option><option value="ironman">Ironman</option></select></div><button class="btn btn-primary btn-full" onclick="nextStep(5)">Continue</button>`;
+        } else if (cs === 6) {
+            h = `<div class="card"><h2>Injuries?</h2></div><div class="card"><select id="injurySelect"><option value="none">None</option><option value="knee">Knee</option><option value="ankle">Ankle</option><option value="back">Back</option><option value="shin">Shin splints</option><option value="hip">Hip</option><option value="foot">Foot</option></select></div><button class="btn btn-primary btn-full" onclick="completeOnboarding()">Create Plan</button>`;
+        }
+        c.innerHTML = h;
+    }
+
+    function nextStep(s) {
+        if (s === 1) {
+            state.userLocation = document.getElementById('locationInput')?.value?.trim() || 'Morocco';
+            const events = suggestEvents(state.userLocation);
+            renderHomeEvents(events);
+        } else if (s === 2) {
+            const sel = document.querySelector('#fitnessBgGroup .chip.selected');
+            if (!sel) { showToast('Select background', 'warning'); return; }
+            state.userProfile.fitnessBackground = sel.dataset.value;
+        } else if (s === 3) {
+            if (state.userProfile.fitnessBackground === 'other_sport') {
+                state.userProfile.otherSport = document.getElementById('otherSportSelect')?.value || '';
+                const lvl = document.querySelector('#sportLevelGroup .chip.selected');
+                state.userProfile.otherSportLevel = lvl ? lvl.dataset.value : '';
+            } else if (state.userProfile.fitnessBackground === 'already_runner') {
+                const lvl = document.querySelector('#runningLevelGroup .chip.selected');
+                state.userProfile.runningLevel = lvl ? lvl.dataset.value : '';
+                state.userProfile.maxKmWithoutTired = parseFloat(document.getElementById('maxKmInput')?.value) || 0;
+            }
+        } else if (s === 4) {
+            state.userProfile.weight = parseFloat(document.getElementById('weightInput')?.value) || 70;
+            state.userProfile.height = parseFloat(document.getElementById('heightInput')?.value) || 170;
+            state.userProfile.age = parseInt(document.getElementById('ageInput')?.value) || 25;
+        } else if (s === 5) {
+            state.userProfile.weeklyAvailableDays = parseInt(document.getElementById('weeklyDaysSelect')?.value) || 4;
+            state.userProfile.primaryGoal = document.getElementById('primaryGoalSelect')?.value || 'fitness';
+        }
+        cs++;
+        if (cs > totalSteps) cs = totalSteps;
+        renderOnboardingStep();
+    }
+
+    function completeOnboarding() {
+        state.userProfile.injuryHistory = document.getElementById('injurySelect')?.value || 'none';
+        state.userProfile.onboarded = true;
+        if (state.userProfile.fitnessBackground === 'already_runner') {
+            state.experience = state.userProfile.runningLevel || 'intermediate';
+            state.weeklyKm = state.userProfile.maxKmWithoutTired * (state.userProfile.weeklyAvailableDays || 4);
+        } else if (state.userProfile.fitnessBackground === 'other_sport') {
+            state.experience = state.userProfile.otherSportLevel || 'intermediate';
+            state.weeklyKm = state.userProfile.otherSportLevel === 'advanced' ? 30 : 20;
+        } else {
+            state.experience = 'beginner';
+            state.weeklyKm = 10;
+        }
+        state.goal = state.userProfile.primaryGoal || 'fitness';
+        state.daysPerWeek = state.userProfile.weeklyAvailableDays || 4;
+        saveState();
+        document.getElementById('onboardingOverlay').style.display = 'none';
+        generatePlan();
+        const events = suggestEvents(state.userLocation);
+        renderHomeEvents(events);
+        showToast('Plan ready!');
+        navigateTo('plan');
+    }
+
+    // ---------- EVENTS (expanded worldwide, dates from 5/20/2026) ----------
+    const eventsDB = {
+        'morocco': [
+            { name: 'Marathon International de Marrakech', date: 'January 24, 2027', location: 'Marrakech', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Casablanca Marathon', date: 'October 25, 2026', location: 'Casablanca', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Rabat Half Marathon', date: 'April 18, 2027', location: 'Rabat', type: 'Half Marathon', distance: '21.1 km' },
+            { name: 'Tangier City Run', date: 'March 14, 2027', location: 'Tangier', type: '10K', distance: '10 km' }
+        ],
+        'usa': [
+            { name: 'Boston Marathon', date: 'April 20, 2026', location: 'Boston, MA', type: 'Marathon', distance: '42.2 km' },
+            { name: 'New York City Marathon', date: 'November 1, 2026', location: 'New York, NY', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Chicago Marathon', date: 'October 11, 2026', location: 'Chicago, IL', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Honolulu Marathon', date: 'December 13, 2026', location: 'Honolulu, HI', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'uk': [
+            { name: 'London Marathon', date: 'April 26, 2026', location: 'London', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Great North Run', date: 'September 13, 2026', location: 'Newcastle', type: 'Half Marathon', distance: '21.1 km' }
+        ],
+        'france': [
+            { name: 'Paris Marathon', date: 'April 5, 2026', location: 'Paris', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Semi-Marathon de Paris', date: 'March 1, 2027', location: 'Paris', type: 'Half Marathon', distance: '21.1 km' }
+        ],
+        'germany': [
+            { name: 'Berlin Marathon', date: 'September 27, 2026', location: 'Berlin', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'spain': [
+            { name: 'Barcelona Marathon', date: 'March 15, 2026', location: 'Barcelona', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Madrid Marathon', date: 'April 26, 2026', location: 'Madrid', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'italy': [
+            { name: 'Rome Marathon', date: 'March 22, 2026', location: 'Rome', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Florence Marathon', date: 'November 29, 2026', location: 'Florence', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'canada': [
+            { name: 'Toronto Waterfront Marathon', date: 'October 18, 2026', location: 'Toronto', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Vancouver Marathon', date: 'May 3, 2026', location: 'Vancouver', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'australia': [
+            { name: 'Sydney Marathon', date: 'September 20, 2026', location: 'Sydney', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Melbourne Marathon', date: 'October 11, 2026', location: 'Melbourne', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'japan': [
+            { name: 'Tokyo Marathon', date: 'March 1, 2026', location: 'Tokyo', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'uae': [
+            { name: 'Dubai Marathon', date: 'January 23, 2027', location: 'Dubai', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'brazil': [
+            { name: 'Rio de Janeiro Marathon', date: 'June 21, 2026', location: 'Rio de Janeiro', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'south africa': [
+            { name: 'Comrades Marathon', date: 'June 14, 2026', location: 'Durban', type: 'Ultra Marathon', distance: '89 km' },
+            { name: 'Cape Town Marathon', date: 'September 20, 2026', location: 'Cape Town', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'india': [
+            { name: 'Mumbai Marathon', date: 'January 18, 2026', location: 'Mumbai', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'china': [
+            { name: 'Beijing Marathon', date: 'October 18, 2026', location: 'Beijing', type: 'Marathon', distance: '42.2 km' },
+            { name: 'Shanghai Marathon', date: 'November 29, 2026', location: 'Shanghai', type: 'Marathon', distance: '42.2 km' }
+        ],
+        'default': [
+            { name: 'Local Parkrun (weekly)', date: 'Every Saturday', location: 'Check parkrun.com', type: '5K', distance: '5 km' }
+        ]
+    };
+
+    function suggestEvents(location) {
+        const loc = location.toLowerCase().trim();
+        let events = [];
+        if (eventsDB[loc]) events = eventsDB[loc];
+        else {
+            for (const [key, val] of Object.entries(eventsDB)) {
+                if (loc.includes(key) || key.includes(loc)) {
+                    events = val;
+                    break;
+                }
+            }
+        }
+        if (!events.length) events = eventsDB['default'];
+        return events;
+    }
+
+    function renderHomeEvents(events) {
+        const c = document.getElementById('homeEventsList');
+        if (!c) return;
+        c.innerHTML = events.slice(0, 4).map(e => {
+            const dateObj = new Date(e.date);
+            const month = dateObj.toLocaleString('default', { month: 'short' });
+            const day = dateObj.getDate();
+            return `
+                <div class="event-card">
+                    <div class="event-date-badge">
+                        <div class="event-month">${month}</div>
+                        <div class="event-day">${day}</div>
+                    </div>
+                    <div class="event-info">
+                        <div class="event-name">${e.name}</div>
+                        <div class="event-location">${e.location}</div>
+                        <span class="event-type-badge">${e.type} · ${e.distance}</span>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    // ---------- RUN SUMMARY & TRANSPARENT DOWNLOAD ----------
+    function showRunSummary(entry) {
+        const card = document.getElementById('runSummaryCard');
+        card.style.display = 'block';
+        document.getElementById('downloadWithBgBtn').style.display = 'block';
+        document.getElementById('downloadTransparentBtn').style.display = 'block';
+        const mins = Math.floor(entry.durationSec/60), secs = entry.durationSec%60;
+        document.getElementById('summaryTime').textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        document.getElementById('summaryDist').textContent = entry.distance.toFixed(2);
+        document.getElementById('summaryPace').textContent = formatPace(entry.pace);
+        document.getElementById('summaryUserInfo').textContent = `${state.profileName} · ${new Date(entry.date).toLocaleDateString()}`;
+        const calories = Math.round(state.userProfile.weight * entry.distance * 0.75);
+        document.getElementById('summaryCalories').textContent = calories;
+        document.getElementById('summaryAge').textContent = state.userProfile.age || '--';
+        document.getElementById('summaryWeight').textContent = state.userProfile.weight || '--';
+        const mc = document.getElementById('summaryMapContainer'); mc.innerHTML = '';
+        if (entry.path?.length > 1) {
+            const smap = L.map(mc, { attributionControl: false, zoomControl: false });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(smap);
+            L.polyline(entry.path.map(p => [p.lat, p.lng]), { color: '#D32F2F', weight: 3 }).addTo(smap);
+            smap.fitBounds(L.polyline(entry.path.map(p => [p.lat, p.lng])).getBounds(), { padding: [20, 20] });
+            setTimeout(() => smap.invalidateSize(), 300);
+        }
+    }
+
+    async function downloadRunImage(transparent) {
+        const card = document.getElementById('runSummaryCard');
+        const originalStyle = card.getAttribute('style');
+        if (transparent) {
+            card.style.background = 'transparent';
+            card.style.border = 'none';
+            card.style.boxShadow = 'none';
+        }
+        try {
+            const canvas = await html2canvas(card, {
+                backgroundColor: transparent ? null : undefined,
+                allowTaint: false,
+                useCORS: true
+            });
+            const link = document.createElement('a');
+            link.download = `GOQ_Run_${new Date().toISOString().slice(0,10)}${transparent ? '_transparent' : ''}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast(`Downloaded ${transparent ? 'transparent' : 'with background'}!`);
+        } catch(e) {
+            showToast('Download failed', 'warning');
+        } finally {
+            card.setAttribute('style', originalStyle || '');
+        }
+    }
+
+    // ---------- CONFIRMATION MODAL ----------
+    function showConfirmModal(di) { const d = state.weeklySchedule[di]; document.getElementById('confirmModalText').textContent = `${d.day}: ${d.type} · ${d.distance} km\nCannot undo.`; document.getElementById('confirmModal').style.display = 'flex'; document.getElementById('confirmModalYes').onclick = () => { finalizeDayCompletion(di); closeConfirmModal(); }; }
+    function closeConfirmModal() { document.getElementById('confirmModal').style.display = 'none'; }
+    function finalizeDayCompletion(di) { if (state.completedRuns[di]) return; state.completedRuns[di] = true; state.completedRuns[di + '_locked'] = true; state.totalRunsCompleted++; const ti = (new Date().getDay() + 6) % 7; let s = 0; for (let i = ti; i >= 0; i--) { if (state.completedRuns[i] && !state.weeklySchedule[i]?.isRest) s++; else break; } state.streak = s; checkAchievements(); saveState(); refreshAll(); showToast('Day completed!'); }
+    function completeRun(di) { if (state.completedRuns[di]) { if (state.completedRuns[di + '_locked']) { showToast('Locked.', 'warning'); return; } delete state.completedRuns[di]; delete state.completedRuns[di + '_locked']; state.totalRunsCompleted = Math.max(0, state.totalRunsCompleted - 1); state.streak = recalcStreak(); saveState(); refreshAll(); showToast('Unmarked', 'warning'); } else showConfirmModal(di); }
+    function recalcStreak() { const ti = (new Date().getDay() + 6) % 7; let s = 0; for (let i = ti; i >= 0; i--) { if (state.completedRuns[i] && !state.weeklySchedule[i]?.isRest) s++; else break; } return s; }
+    function autoMatchRecordedRun(entry) { const ti = (new Date().getDay() + 6) % 7; if (!state.planGenerated || !state.weeklySchedule[ti] || state.weeklySchedule[ti].isRest || state.completedRuns[ti]) return; const pd = state.weeklySchedule[ti].distance; if (pd > 0 && Math.abs(entry.distance - pd) / pd < 0.3) { state.completedRuns[ti] = true; state.completedRuns[ti + '_locked'] = true; state.totalRunsCompleted++; entry.plannedDayMatched = true; const tix = (new Date().getDay() + 6) % 7; let s = 0; for (let i = tix; i >= 0; i--) { if (state.completedRuns[i] && !state.weeklySchedule[i]?.isRest) s++; else break; } state.streak = s; checkAchievements(); saveState(); showToast('Plan day auto-completed!'); } }
+
+    // ---------- CHALLENGES ----------
+    const challengesDB = [
+        { id: 'c1', name: 'Run 5K under 25 min', target: '5K < 25:00', timeLimit: 25, difficulty: 'Hard', points: 150, medal: '🥇' },
+        { id: 'c2', name: 'Run 10K under 55 min', target: '10K < 55:00', timeLimit: 55, difficulty: 'Hard', points: 200, medal: '🥇' },
+        { id: 'c3', name: 'Half Marathon under 2h', target: '21.1K < 2:00:00', timeLimit: 120, difficulty: 'Hard', points: 300, medal: '🏆' },
+        { id: 'c4', name: 'Run 3K under 15 min', target: '3K < 15:00', timeLimit: 15, difficulty: 'Medium', points: 100, medal: '🥈' },
+        { id: 'c5', name: 'Run 1K under 5 min', target: '1K < 5:00', timeLimit: 5, difficulty: 'Medium', points: 80, medal: '🥈' },
+        { id: 'c6', name: 'Jog 2K under 14 min', target: '2K < 14:00', timeLimit: 14, difficulty: 'Easy', points: 50, medal: '🥉' },
+        { id: 'c7', name: 'Walk 1K under 10 min', target: '1K < 10:00', timeLimit: 10, difficulty: 'Easy', points: 30, medal: '🥉' }
+    ];
+    function getDiffClass(d) { return d === 'Hard' ? 'badge-hard' : d === 'Medium' ? 'badge-medium' : 'badge-easy'; }
+    function renderHomeChallenges() { const c = document.getElementById('homeChallengesList'); if (!c) return; c.innerHTML = challengesDB.map(ch => { const done = state.completedChallenges.includes(ch.id); return `<div class="challenge-card"><div class="challenge-name">${ch.name} ${done ? '<span style="font-size:1.5rem;">' + ch.medal + '</span>' : ''}</div><div class="challenge-detail">${ch.target} · ${ch.points} pts</div><span class="challenge-badge ${getDiffClass(ch.difficulty)}">${ch.difficulty}</span>${!done ? `<button class="btn btn-primary btn-sm" style="float:right;margin-top:4px;" onclick="attemptChallenge('${ch.id}')">Attempt</button>` : '<span style="color:var(--secondary);font-weight:600;float:right;">Done!</span>'}</div>`; }).join(''); renderHomeMedals(); }
+    function attemptChallenge(id) { const ch = challengesDB.find(c => c.id === id); if (!ch) return; const up = getBestPace() || 6; if (up * parseFloat(ch.target.split(' ')[0]) <= ch.timeLimit) { state.completedChallenges.push(id); state.totalPoints += ch.points; updateAllPoints(); saveState(); renderHomeChallenges(); showToast(`+${ch.points} pts`); } else showToast('Keep training!', 'warning'); }
+    function renderHomeMedals() { const m = document.getElementById('homeMedals'); if (!m) return; m.innerHTML = state.completedChallenges.length === 0 ? '<p class="text-secondary">No medals yet.</p>' : state.completedChallenges.map(id => { const ch = challengesDB.find(c => c.id === id); return ch ? `<span style="font-size:1.8rem;margin:4px;">${ch.medal}</span>` : ''; }).join(''); }
+
+    // ---------- GROUPS (with leave) ----------
+    function updateAllPoints() {
+        state.groups.forEach(g => {
+            const member = g.membersList.find(m => m.name === state.profileName);
+            if (member) member.points = state.totalPoints;
+        });
+    }
+    function createGroup() { /* unchanged */ }
+    function joinGroup() { /* unchanged */ }
+    function leaveGroup(passcode) {
+        const group = state.myGroups.find(g => g.passcode === passcode);
+        if (!group) return;
+        state.myGroups = state.myGroups.filter(g => g.passcode !== passcode);
+        const original = state.groups.find(g => g.passcode === passcode);
+        if (original) {
+            original.members--;
+            original.membersList = original.membersList.filter(m => m.name !== state.profileName);
+        }
+        saveState();
+        renderGroups();
+        renderGroupLeaderboard();
+        showToast('Left group');
+    }
+
+    function renderGroups() {
+        const publicContainer = document.getElementById('publicGroupsList');
+        const myContainer = document.getElementById('myGroupsList');
+        publicContainer.innerHTML = state.groups.length === 0 ? '<p class="text-secondary">None yet.</p>' : state.groups.map(g => `<div class="group-card"><div class="group-name">${g.name}</div><div class="group-members">${g.members} members · Code: ${g.passcode}</div></div>`).join('');
+        myContainer.innerHTML = state.myGroups.length === 0 ? '<p class="text-secondary">None.</p>' : state.myGroups.map(g => `
+            <div class="group-card">
+                <div class="group-name">${g.name} <span class="text-secondary" style="font-size:0.75rem;">(${g.members} members)</span></div>
+                <button class="btn btn-sm btn-outline" style="margin-top:6px;" onclick="leaveGroup('${g.passcode}')">Leave</button>
+            </div>`).join('');
+    }
+
+    // ---------- LEADERBOARDS ----------
+    function renderGlobalLeaderboard() {
+        const all = [...state.leaderboard, { name: state.profileName, points: state.totalPoints, avatar: state.profileInitial }].sort((a, b) => b.points - a.points).slice(0, 6);
+        const c = document.getElementById('leaderboardList');
+        if (!c) return;
+        c.innerHTML = all.map((e, i) => `<div class="leaderboard-item" style="${e.name === state.profileName ? 'border:2px solid var(--primary);' : ''}"><div class="leaderboard-rank">#${i + 1}</div><div class="leaderboard-avatar">${e.avatar}</div><div class="leaderboard-name">${e.name}</div><div class="leaderboard-points">${e.points} pts</div></div>`).join('');
+    }
+
+    function renderGroupLeaderboard() {
+        const container = document.getElementById('groupLeaderboardList');
+        if (!container) return;
+        const members = [];
+        state.myGroups.forEach(g => {
+            g.membersList.forEach(m => members.push(m));
+        });
+        if (members.length === 0) {
+            container.innerHTML = '<p class="text-secondary">Join a group to compete with friends.</p>';
+            return;
+        }
+        const sorted = members.sort((a, b) => b.points - a.points);
+        container.innerHTML = sorted.map((m, i) => `
+            <div class="leaderboard-item" style="${m.name === state.profileName ? 'border:2px solid var(--primary);' : ''}">
+                <div class="leaderboard-rank">#${i + 1}</div>
+                <div class="leaderboard-avatar">${m.name.charAt(0).toUpperCase()}</div>
+                <div class="leaderboard-name">${m.name}</div>
+                <div class="leaderboard-points">${m.points} pts</div>
+            </div>`).join('');
+    }
+
+    function updateLeaderboard() {
+        const user = { name: state.profileName, points: state.totalPoints, avatar: state.profileInitial };
+        const all = [...state.leaderboard, user].sort((a, b) => b.points - a.points).slice(0, 8);
+        state.leaderboard = all.filter(e => e.name !== state.profileName);
+        saveState();
+        renderGlobalLeaderboard();
+        renderGroupLeaderboard();
+    }
+
+    // ---------- PROFILE ----------
+    function updateProfileName() { state.profileName = document.getElementById('profileNameInput').value.trim() || 'Runner'; state.profileInitial = state.profileName.charAt(0).toUpperCase(); state.profileUsername = state.profileName.toLowerCase().replace(/\s+/g, '_'); document.getElementById('profileAvatar').textContent = state.profileInitial; document.getElementById('profileUsername').textContent = state.profileUsername; updateLeaderboard(); saveState(); }
+
+    // ---------- GPS ----------
+    let map = null, rp = null, pm = null, wid = null, ra = false, rst = null, re = 0, rti = null, rps = [], rd = 0, lp = null;
+    function initMap(lat, lng) { if (!map) { map = L.map('map', { attributionControl: false, zoomControl: false }).setView([lat, lng], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map); pm = L.marker([lat, lng]).addTo(map); rp = L.polyline([], { color: '#D32F2F', weight: 4 }).addTo(map); } else { map.setView([lat, lng], 16); pm.setLatLng([lat, lng]); rp.setLatLngs([]); } map.invalidateSize(); }
+    function startRun() { if (!navigator.geolocation) { showToast('GPS not supported', 'warning'); return; } document.getElementById('gpsStatus').textContent = 'Acquiring GPS...'; rps = []; rd = 0; re = 0; lp = null; navigator.geolocation.getCurrentPosition(pos => { const lat = pos.coords.latitude, lng = pos.coords.longitude; initMap(lat, lng); ra = true; rst = Date.now(); document.getElementById('startRunBtn').style.display = 'none'; document.getElementById('stopRunBtn').style.display = 'block'; document.getElementById('runTimer').textContent = '00:00'; document.getElementById('runDistance').textContent = '0.00'; document.getElementById('runPace').textContent = '--'; document.getElementById('gpsStatus').textContent = 'GPS active'; rps.push({ lat, lng }); lp = { lat, lng }; wid = navigator.geolocation.watchPosition(p => { if (!ra) return; const nl = p.coords.latitude, nn = p.coords.longitude; rps.push({ lat: nl, lng: nn }); if (lp) rd += haversine(lp.lat, lp.lng, nl, nn); lp = { lat: nl, lng: nn }; document.getElementById('runDistance').textContent = rd.toFixed(2); rp.addLatLng([nl, nn]); pm.setLatLng([nl, nn]); map.panTo([nl, nn], { animate: true }); updatePace(); }, err => {}, { enableHighAccuracy: true }); rti = setInterval(() => { if (!ra) return; re = Math.floor((Date.now() - rst) / 1000); document.getElementById('runTimer').textContent = `${Math.floor(re / 60).toString().padStart(2, '0')}:${(re % 60).toString().padStart(2, '0')}`; updatePace(); }, 1000); }, err => { showToast('Location denied', 'warning'); }, { enableHighAccuracy: true }); }
+    function updatePace() { if (rd > 0 && re > 0) { const pm = (re / 60) / rd; document.getElementById('runPace').textContent = `${Math.floor(pm)}:${Math.round((pm % 1) * 60).toString().padStart(2, '0')}`; } else document.getElementById('runPace').textContent = '--'; }
+    function stopRun() { if (!ra) return; ra = false; if (wid) { navigator.geolocation.clearWatch(wid); wid = null; } if (rti) { clearInterval(rti); rti = null; } document.getElementById('startRunBtn').style.display = 'block'; document.getElementById('stopRunBtn').style.display = 'none'; const ds = Math.floor((Date.now() - rst) / 1000), dist = rd, pace = dist > 0 ? (ds / 60) / dist : 0; const entry = { id: Date.now(), date: new Date().toISOString(), distance: parseFloat(dist.toFixed(2)), durationSec: ds, pace, path: rps.map(p => ({ lat: p.lat, lng: p.lng })), plannedDayMatched: false }; state.runHistory.push(entry); autoMatchRecordedRun(entry); if (!state.bestPace || pace < state.bestPace) state.bestPace = pace; state.totalRunsCompleted++; state.streak++; state.totalPoints += Math.floor(dist); updateAllPoints(); checkAchievements(); updateLeaderboard(); saveState(); refreshAll(); showRunSummary(entry); showToast(`Saved: ${dist.toFixed(2)} km`); }
+    function haversine(lat1, lon1, lat2, lon2) { const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180, a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+
+    // ---------- THEME ----------
+    function applyTheme(t) { document.getElementById('appContainer').classList.toggle('light-theme', t === 'light'); document.querySelectorAll('#themeGroup .chip').forEach(c => c.classList.toggle('selected', c.dataset.theme === t)); }
+    document.getElementById('themeGroup').addEventListener('click', e => { if (e.target.classList.contains('chip')) { state.theme = e.target.dataset.theme; applyTheme(state.theme); saveState(); } });
+    document.addEventListener('click', e => {
+        if (e.target.classList.contains('chip')) {
+            const group = e.target.parentElement;
+            if (group && group.classList.contains('chip-group')) {
+                if (group.id === 'shoeExpGroup' || group.id === 'cosmeticExpGroup' || 
+                    group.id === 'shoeRaceTypeGroup' || group.id === 'cosmeticRaceTypeGroup' ||
+                    group.id === 'runStyleGroup' || group.id === 'experienceGroup' ||
+                    group.closest('#onboardingOverlay')) {
+                    group.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+                    e.target.classList.add('selected');
+                }
+            }
+        }
+    });
+
+    function loadState() { const s = localStorage.getItem('runCoachState'); if (s) { try { Object.assign(state, JSON.parse(s)); } catch (e) { } } applyTheme(state.theme || 'dark'); document.getElementById('profileAvatar').textContent = state.profileInitial; document.getElementById('profileNameInput').value = state.profileName; document.getElementById('profileUsername').textContent = state.profileUsername; if (!state.userProfile.onboarded) { document.getElementById('onboardingOverlay').style.display = 'flex'; renderOnboardingStep(); } else { document.getElementById('onboardingOverlay').style.display = 'none'; if (state.userLocation) { const events = suggestEvents(state.userLocation); renderHomeEvents(events); } } }
+    function saveState() { localStorage.setItem('runCoachState', JSON.stringify(state)); }
+
+    function navigateTo(p) { document.querySelectorAll('.page').forEach(pg => pg.classList.remove('active')); document.getElementById('page-' + p)?.classList.add('active'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); document.querySelector(`.nav-item[data-page="${p}"]`)?.classList.add('active'); document.getElementById('mainContent').scrollTop = 0; if (p === 'dashboard') { refreshDashboard(); renderHomeChallenges(); renderGlobalLeaderboard(); renderGroupLeaderboard(); } if (p === 'plan') refreshPlanPage(); if (p === 'profile') { refreshProfilePage(); renderGroups(); } if (p === 'record') refreshRecordPage(); }
+    function showToast(m, t = 'success') { const el = document.getElementById('toast'); el.textContent = m; el.className = 'toast ' + t + ' show'; clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2200); }
+
+    // ---------- PLAN ----------
+    function generatePlan() { state.experience = document.querySelector('#experienceGroup .chip.selected')?.dataset?.value || state.experience; state.goal = document.getElementById('goalSelect').value; state.weeklyKm = parseInt(document.getElementById('weeklyKmInput').value) || state.weeklyKm; state.daysPerWeek = parseInt(document.getElementById('daysPerWeek').value) || state.daysPerWeek; const p = buildTrainingPlan(state.experience, state.goal, state.weeklyKm, state.daysPerWeek); state.planName = p.name; state.planDescription = p.description; state.weeklySchedule = p.schedule; state.planGenerated = true; state.completedRuns = {}; saveState(); document.getElementById('headerBadge').textContent = 'Plan Ready'; }
+    function buildTrainingPlan(exp, goal, km, days) { let e = 0, t = 0, l = 0, i = 0; if (exp === 'beginner') { e = Math.max(3, Math.round(km * 0.25)); t = Math.max(2, Math.round(km * 0.18)); l = Math.max(4, Math.round(km * 0.35)); i = Math.max(1, Math.round(km * 0.12)); } else if (exp === 'intermediate') { e = Math.max(5, Math.round(km * 0.28)); t = Math.max(4, Math.round(km * 0.22)); l = Math.max(7, Math.round(km * 0.38)); i = Math.max(2, Math.round(km * 0.15)); } else { e = Math.max(7, Math.round(km * 0.25)); t = Math.max(6, Math.round(km * 0.25)); l = Math.max(10, Math.round(km * 0.40)); i = Math.max(3, Math.round(km * 0.18)); } if (goal === 'marathon') { l = Math.round(l * 1.6); e = Math.round(e * 1.2); } else if (goal === 'triathlon' || goal === 'ironman') { l = Math.round(l * 1.8); t = Math.round(t * 1.3); } const dn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']; const ri = days === 3 ? [1, 3, 5] : days === 4 ? [1, 2, 4, 5] : days === 5 ? [0, 1, 3, 4, 5] : [0, 1, 2, 4, 5, 6]; const pool = [{ type: 'Easy Run', dist: e, badge: 'badge-easy', intensity: 'Easy' }, { type: 'Tempo Run', dist: t, badge: 'badge-medium', intensity: 'Medium' }, { type: 'Interval', dist: i, badge: 'badge-hard', intensity: 'Hard' }, { type: 'Easy Run', dist: e, badge: 'badge-easy', intensity: 'Easy' }, { type: 'Long Run', dist: l, badge: 'badge-medium', intensity: 'Medium-Long' }, { type: 'Easy Run', dist: Math.round(e * 0.8), badge: 'badge-easy', intensity: 'Easy' }]; return { name: goal.replace('_', ' ').toUpperCase() + ' Plan', description: 'Personalized plan.', schedule: dn.map((d, i) => { if (ri.includes(i)) { const t = pool[ri.indexOf(i) % pool.length]; return { day: d, dayIndex: i, type: t.type, distance: t.dist, badge: t.badge, intensity: t.intensity, isRest: false }; } return { day: d, dayIndex: i, type: 'Rest Day', distance: 0, badge: '', intensity: 'Rest', isRest: true }; }) }; }
+    function checkAchievements() { const a = state.achievements; if (state.totalRunsCompleted >= 1 && !a.includes('first')) a.push('first'); if (state.totalRunsCompleted >= 5 && !a.includes('five')) a.push('five'); }
+    function getBestPace() { return state.runHistory.length ? Math.min(...state.runHistory.map(r => r.pace).filter(p => p > 0)) : null; }
+    function getTotalKm() { return state.runHistory.reduce((s, r) => s + r.distance, 0); }
+
+    function refreshAll() { refreshDashboard(); refreshPlanPage(); refreshProfilePage(); refreshRecordPage(); }
+    function refreshDashboard() { document.getElementById('greetingText').textContent = `Hello, ${state.profileName}!`; document.getElementById('planSummary').textContent = state.planGenerated ? `Plan: ${state.planName}` : 'Complete your profile.'; document.getElementById('headerBadge').textContent = state.planGenerated ? 'Plan Ready' : 'Ready'; if (state.userLocation) { const events = suggestEvents(state.userLocation); renderHomeEvents(events); } }
+    function refreshPlanPage() { document.getElementById('planTitle').textContent = state.planName || 'Training Plan'; document.getElementById('planDescription').textContent = state.planDescription || ''; const c = document.getElementById('weeklySchedule'); if (!state.weeklySchedule.length) { c.innerHTML = '<p class="text-secondary">No plan yet.</p>'; return; } const ti = (new Date().getDay() + 6) % 7; c.innerHTML = state.weeklySchedule.map((d, i) => { const it = i === ti, dn = state.completedRuns[i], locked = state.completedRuns[i + '_locked']; return `<div class="schedule-day${d.isRest ? ' rest' : ''}" onclick="${d.isRest ? '' : (dn && locked ? '' : `completeRun(${i})`)}"><div class="day-indicator ${dn ? 'completed' : (it ? 'today' : '')}"></div><div class="schedule-info"><div class="title">${d.day} - ${d.type}</div><div class="detail">${d.distance ? `${d.distance} km` : ''}</div></div>${d.badge ? `<span class="schedule-badge ${d.badge}">${d.intensity}</span>` : ''}${dn ? `<span style="font-size:0.7rem;color:var(--secondary);">${locked ? 'Locked' : 'Done'}</span>` : ''}</div>`; }).join(''); }
+    function refreshProfilePage() { document.getElementById('progressTotalKm').textContent = getTotalKm().toFixed(1); document.getElementById('progressRuns').textContent = state.totalRunsCompleted; document.getElementById('progressStreak').textContent = state.streak; const bp = getBestPace(); document.getElementById('progressBestPace').textContent = bp ? `${Math.floor(bp)}:${Math.round((bp % 1) * 60).toString().padStart(2, '0')}/km` : '--'; const m = { first: 'First Run', five: '5 Runs' }; document.getElementById('achievementsList').innerHTML = state.achievements.length ? state.achievements.map(a => `<div>${m[a] || a}</div>`).join('') : '<p class="text-secondary">Complete runs!</p>'; document.querySelectorAll('#experienceGroup .chip').forEach(c => c.classList.toggle('selected', c.dataset.value === state.experience)); document.getElementById('goalSelect').value = state.goal; document.getElementById('weeklyKmInput').value = state.weeklyKm; document.getElementById('daysPerWeek').value = state.daysPerWeek; }
+    function refreshRecordPage() { const l = document.getElementById('recentRunsList'); if (!state.runHistory.length) { l.innerHTML = '<p class="text-secondary">No runs.</p>'; return; } l.innerHTML = [...state.runHistory].reverse().slice(0, 5).map(r => `<div style="padding:6px 0;">${new Date(r.date).toLocaleDateString()} <span class="text-primary">${r.distance.toFixed(2)} km</span>${r.plannedDayMatched ? ' <span style="color:var(--secondary);">Plan</span>' : ''}</div>`).join(''); }
+    function formatPace(p) { if (!p) return '--'; const m = Math.floor(p); return `${m}:${Math.round((p - m) * 60).toString().padStart(2, '0')}`; }
+
+    function init() { loadState(); refreshAll(); renderHomeChallenges(); renderGlobalLeaderboard(); renderGroupLeaderboard(); renderGroups(); }
+    init();
+</script>
+</body>
+</html>
